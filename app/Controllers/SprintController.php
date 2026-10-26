@@ -6,6 +6,7 @@ namespace Controllers;
 use Core\Factory;
 use Core\View;
 use Models\TicketCache;
+use Services\DemoSlidesService;
 
 final class SprintController
 {
@@ -144,5 +145,58 @@ final class SprintController
     private static function isDemoType(string $type): bool
     {
         return preg_match('/(?<!\pL)(us|user story|enabler|feature)(?!\pL)/u', mb_strtolower($type)) === 1;
+    }
+
+    public function demoSlides(): void
+    {
+        $sprintId   = (int) ($_POST['sprint_id'] ?? 0);
+        $sprintName = trim((string) ($_POST['sprint_name'] ?? '')) ?: 'Sprint';
+        if ($sprintId <= 0) {
+            abort(400, 'Identifiant de sprint manquant.');
+        }
+
+        // Clés cochées uniquement — validées avant tout traitement
+        $keys = array_values(array_unique(array_filter(
+            (array) ($_POST['demo_tickets'] ?? []),
+            static fn (mixed $k): bool => is_string($k) && (bool) preg_match('/^[A-Z][A-Z0-9_]*-\d+$/', $k)
+        )));
+
+        if ($keys === []) {
+            flash('warning', 'Aucun ticket coché : aucune slide générée.');
+            redirect('sprint/show', ['id' => $sprintId, 'name' => $sprintName]);
+        }
+
+        set_time_limit(120); // rendu PPTX + catalogue Confluence
+
+        try {
+            $jira = Factory::jira();
+
+            // Données UNIQUEMENT des tickets cochés (pas de re-listing du sprint,
+            // pas de sprint report) : ce sont les cases qui décident.
+            $issues = $jira->getIssuesByKeys(
+                (string) config('jira.project_key', 'B4A'),
+                $keys,
+                [], // tous types/statuts : la sélection vient des cases cochées
+                ['description', 'status', 'issuetype', 'assignee', 'created']
+            );
+
+            $path = (new DemoSlidesService())->generate(
+                ['id' => $sprintId, 'name' => $sprintName],
+                $issues,
+                $keys
+            );
+        } catch (Throwable $e) {
+            error_log('Slides démo : ' . $e->getMessage());
+            flash('error', 'Génération des slides impossible : ' . $e->getMessage());
+            redirect('sprint/show', ['id' => $sprintId, 'name' => $sprintName]);
+        }
+
+        // Téléchargement immédiat (le fichier reste aussi disponible dans <racine>/out)
+        header('Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation');
+        header('Content-Disposition: attachment; filename="' . basename($path) . '"');
+        header('Content-Length: ' . (string) filesize($path));
+        header('X-Content-Type-Options: nosniff');
+        readfile($path);
+        exit;
     }
 }

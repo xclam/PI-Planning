@@ -5,6 +5,14 @@ use Controllers\PiController;
 use Controllers\SprintController;
 
 spl_autoload_register(static function (string $class): void {
+    if (str_starts_with($class, 'DemoSprint\\')) {
+        $file = __DIR__ . '/../app/DemoSprint/src/'
+            . str_replace('\\', '/', substr($class, strlen('DemoSprint\\'))) . '.php';
+        if (is_file($file)) {
+            require_once $file;
+        }
+        return;
+    }
     $file = __DIR__ . '/../app/' . str_replace('\\', '/', $class) . '.php';
     if (is_file($file)) {
         require_once $file;
@@ -58,6 +66,7 @@ $routes = [
     '/pi/update'   => ['POST' => [PiController::class, 'update']],
     '/pi/create-us'=> ['POST' => [PiController::class, 'createUs']],
     '/sprint/show' => ['GET'  => [SprintController::class, 'show']],
+    '/sprint/demo-slides' => ['POST' => [SprintController::class, 'demoSlides']],
 ];
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';

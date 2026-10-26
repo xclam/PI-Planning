@@ -52,47 +52,55 @@
 </section>
 
 <section>
-    <div class="toolbar">
-        <h2>Préparation de la démo <small class="muted" data-count-for="demo"></small></h2>
-        <div class="toolbar-actions">
-            <button type="button" class="outline secondary btn-status-toggle" data-status="terminé">Terminé</button>
-            <button type="button" class="outline secondary btn-status-toggle" data-status="à tester">À tester</button>
-            <button type="button" class="outline secondary btn-status-toggle" data-status="en réalisation">En réalisation</button>
-            <button type="button" class="outline" data-copy-keys="demo" data-format="list">Copier les clés</button>
-            <button type="button" class="outline" data-copy-keys="demo" data-format="jql">Copier le JQL</button>
-        </div>
-    </div>
+    <form method="POST" action="<?= e(url('sprint/demo-slides')) ?>">
+        <?= csrf_field() ?>
+        <input type="hidden" name="sprint_id" value="<?= (int) $sprintId ?>">
+        <input type="hidden" name="sprint_name" value="<?= e($sprintName) ?>">
 
-    <figure>
-        <table>
-            <thead>
-                <tr>
-                    <th class="col-check"><input type="checkbox" data-select-all="demo" aria-label="Tout sélectionner"></th>
-                    <th>ID</th>
-                    <th>Type</th>
-                    <th>Titre</th>
-                    <th>Statut</th>
-                    <th>Assigné à</th>
-                </tr>
-            </thead>
-            <tbody>
-            <?php if (empty($issues)): ?>
-                <tr><td colspan="6">Aucun ticket trouvé dans ce sprint.</td></tr>
-            <?php else: ?>
-                <?php foreach ($issues as $issue): $f = $issue['fields'] ?? []; ?>
-                    <tr class="demo-ticket-row" data-status="<?= e(mb_strtolower((string) ($f['status']['name'] ?? ''))) ?>">
-                        <td class="col-check">
-                            <input type="checkbox" data-check-group="demo" value="<?= e($issue['key']) ?>" <?= $issue['_preselect'] ? 'checked' : '' ?>>
-                        </td>
-                        <td><a href="<?= e(jira_url($issue['key'])) ?>" target="_blank" rel="noopener noreferrer"><strong><?= e($issue['key']) ?></strong></a></td>
-                        <td><?= e($f['issuetype']['name'] ?? '') ?></td>
-                        <td><?= e($f['summary'] ?? '') ?></td>
-                        <td><span class="badge badge-<?= e($issue['_status_class']) ?>"><?= e($f['status']['name'] ?? '') ?></span></td>
-                        <td><?= e($f['assignee']['displayName'] ?? 'Non assigné') ?></td>
+        <div class="toolbar">
+            <h2>Préparation de la démo <small class="muted" data-count-for="demo"></small></h2>
+            <div class="toolbar-actions">
+                <button type="button" class="outline secondary btn-status-toggle" data-status="terminé">Terminé</button>
+                <button type="button" class="outline secondary btn-status-toggle" data-status="à tester">À tester</button>
+                <button type="button" class="outline secondary btn-status-toggle" data-status="en réalisation">En réalisation</button>
+                <button type="button" class="outline" data-copy-keys="demo" data-format="list">Copier les clés</button>
+                <button type="button" class="outline" data-copy-keys="demo" data-format="jql">Copier le JQL</button>
+                <button type="submit">Créer les slides de la démo</button>
+            </div>
+        </div>
+
+        <figure>
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-check"><input type="checkbox" data-select-all="demo" aria-label="Tout sélectionner"></th>
+                        <th>ID</th>
+                        <th>Type</th>
+                        <th>Titre</th>
+                        <th>Statut</th>
+                        <th>Assigné à</th>
                     </tr>
-                <?php endforeach; ?>
-            <?php endif; ?>
-            </tbody>
-        </table>
-    </figure>
+                </thead>
+                <tbody>
+                <?php if (empty($issues)): ?>
+                    <tr><td colspan="6">Aucun ticket trouvé dans ce sprint.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($issues as $issue): $f = $issue['fields'] ?? []; ?>
+                        <tr class="demo-ticket-row" data-status="<?= e(mb_strtolower((string) ($f['status']['name'] ?? ''))) ?>">
+                            <td class="col-check">
+                                <input type="checkbox" name="demo_tickets[]" data-check-group="demo"
+                                       value="<?= e($issue['key']) ?>" <?= $issue['_preselect'] ? 'checked' : '' ?>>
+                            </td>
+                            <td><a href="<?= e(jira_url($issue['key'])) ?>" target="_blank" rel="noopener noreferrer"><strong><?= e($issue['key']) ?></strong></a></td>
+                            <td><?= e($f['issuetype']['name'] ?? '') ?></td>
+                            <td><?= e($f['summary'] ?? '') ?></td>
+                            <td><span class="badge badge-<?= e($issue['_status_class']) ?>"><?= e($f['status']['name'] ?? '') ?></span></td>
+                            <td><?= e($f['assignee']['displayName'] ?? 'Non assigné') ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </figure>
+    </form>
 </section>
