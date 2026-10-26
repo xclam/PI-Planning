@@ -1,5 +1,6 @@
 # Configuration sensible
 /config/config.php
+/app/DemoSprint/config.php
 
 # IDE & OS
 .idea/
