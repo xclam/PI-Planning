@@ -18,7 +18,7 @@ final class UserDirectory
     /** @var array<string,Person> */
     private array $seen = [];
 
-    public function __construct(private readonly JiraClient $jira, array $rolesConfig, array $overrides)
+    public function __construct(private readonly \Core\JiraClient $jira, array $rolesConfig, array $overrides)
     {
         foreach (['po' => Role::Po, 'scrum' => Role::Scrum] as $key => $role) {
             foreach ($rolesConfig[$key]['logins'] ?? [] as $login) {

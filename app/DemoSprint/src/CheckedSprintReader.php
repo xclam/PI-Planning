@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace DemoSprint;
 
+use Services\DescriptionParser;
+
 /**
  * Construit le rapport de démo UNIQUEMENT à partir des tickets cochés dans la page.
  * Aucun appel de listing Jira : les issues sont fournies par l'application.

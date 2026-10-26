@@ -66,10 +66,6 @@ final class DemoSlidesService
      */
     public function generate(array $sprint, array $issues, array $selectedKeys): string
     {
-        if (!class_exists(\SiCatalog::class)) {
-            throw new RuntimeException('Classe SiCatalog introuvable dans app/DemoSprint : elle est requise pour le catalogue des SI.');
-        }
-
         self::registerPhpPresentation();
         $config = self::demoConfig();
 
@@ -87,10 +83,8 @@ final class DemoSlidesService
             );
         }
 
-        $confluence = ($config['confluence']['enabled'] ?? true) ? Factory::confluence() : null;
-        $catalog     = \SiCatalog::build($config, $confluence);
-        $renderer    = new SlideRenderer($config['theme'] ?? [], $catalog, $config['max_objective'] ?? null);
-        $ppt         = $renderer->render($report);
+        $renderer = new SlideRenderer($config['theme'] ?? [], $config['max_objective'] ?? null);
+        $ppt      = $renderer->render($report);
 
         $dir = (string) $config['output_dir'];
         if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {

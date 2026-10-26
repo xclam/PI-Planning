@@ -22,7 +22,6 @@ final class SlideRenderer
 
     public function __construct(
         array $theme,
-        private readonly SiCatalog $catalog,
         private readonly int $maxObjective = 300,
     ) {
         $this->c = $theme['colors'];
@@ -193,7 +192,7 @@ final class SlideRenderer
         $label = ($t->si ?? 'SI ?') . ' – ' . $t->title;
         $this->text($slide, 40, 30, 900, 40, $label, 24, $this->c['blue'], $this->f['title'], bold: true);
 
-        $siDescription = $t->si !== null ? $this->catalog->describe($t->si) : null;
+        $siDescription = null;
         if ($siDescription !== null) {
             $this->text($slide, 40, 75, 900, 50, $siDescription, 12, $this->c['greyText'], $this->f['body']);
         }
