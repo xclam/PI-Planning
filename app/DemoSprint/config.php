@@ -9,7 +9,7 @@ declare(strict_types=1);
 return [
     'jira' => [
         'base_url'  => getenv('JIRA_BASE_URL') ?: 'https://gojira.enedis.fr',
-        'token'     => getenv('JIRA_TOKEN') ?: 'NTY0NDcyODc0Njg1Or06ODTRYSAmPiaTvhIO2ADDA0t9',
+        'token'     => getenv('JIRA_TOKEN') ?: '',
         'ca_bundle' => getenv('CA_BUNDLE') ?: null,
         'timeout'   => 30,
         'board_id'  => 4,
