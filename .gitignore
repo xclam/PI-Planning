@@ -1,0 +1,8 @@
+# Configuration sensible
+/config/config.php
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

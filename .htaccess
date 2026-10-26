@@ -1,0 +1,10 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /piplanning/
+
+    # Empêche la boucle : ne réécrit pas si l'URL cible déjà le dossier public
+    RewriteCond %{REQUEST_URI} !^/piplanning/public/
+    
+    # Redirige tout le reste vers le dossier public
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
