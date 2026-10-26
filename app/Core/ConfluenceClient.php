@@ -1,88 +1,67 @@
-<?php 
+<?php
+declare(strict_types=1);
+
 namespace Core;
 
-class ConfluenceClient {
-    private HttpClient $http;
+final class ConfluenceClient
+{
     private string $api;
 
-    public function __construct(HttpClient $http, string $baseUrl) {
-        $this->http = $http;
+    public function __construct(private readonly HttpClient $http, string $baseUrl)
+    {
         $this->api = rtrim($baseUrl, '/') . '/rest/api/';
     }
 
-    public function getPage(string $pageId): array {
-        return $this->http->get($this->api . 'content/' . $pageId . '?expand=body.storage,version');
+    public function getPage(string $pageId): array
+    {
+        return $this->http->get($this->api . 'content/' . rawurlencode($pageId), ['expand' => 'body.storage,version']);
     }
 
-    public function updatePage(string $pageId, string $title, string $htmlBody, int $currentVersion): array {
-        $payload = [
-            'type' => 'page',
-            'title' => $title,
-            'body' => [
-                'storage' => [
-                    'value' => $htmlBody,
-                    'representation' => 'storage'
-                ]
-            ],
-            'version' => [
-                'number' => $currentVersion + 1
-            ]
-        ];
-
-        return $this->http->put($this->api . 'content/' . $pageId, $payload);
+    public function updatePage(string $pageId, string $title, string $htmlBody, int $currentVersion): array
+    {
+        return $this->http->put($this->api . 'content/' . rawurlencode($pageId), [
+            'type'    => 'page',
+            'title'   => $title,
+            'body'    => ['storage' => ['value' => $htmlBody, 'representation' => 'storage']],
+            'version' => ['number' => $currentVersion + 1],
+        ]);
     }
 
-    public static function extractPageIdFromUrl(string $text): ?string {
-        if (preg_match('/pageId=(\d+)/', $text, $matches)) {
-            return $matches[1];
-        }
-        if (preg_match('/\/pages\/(\d+)/', $text, $matches)) {
-            return $matches[1];
+    public static function extractPageIdFromUrl(string $text): ?string
+    {
+        if (preg_match('/pageId=(\d+)/', $text, $m) || preg_match('#/pages/(\d+)#', $text, $m)) {
+            return $m[1];
         }
         return null;
     }
 
     /**
-     * Analyse le contenu HTML/XHTML stocké de Confluence pour en extraire les informations techniques
+     * Extrait les infos techniques du stockage XHTML Confluence.
+     * `format` vaut null si rien n'est détecté explicitement (avant : 'json' par défaut,
+     * ce qui écrasait systématiquement le format lu dans Jira).
      */
-    public static function parsePageContent(string $htmlBody): array {
-        $data = [
-            'topic' => '',
-            'choree' => '',
-            'type_flux' => 'Kafka',
-            'format' => 'json',
-            'oms' => [],
-            'path_hdfs' => '',
-            'table_hive' => ''
-        ];
+    public static function parsePageContent(string $htmlBody): array
+    {
+        $data = ['topic' => '', 'format' => null, 'path_hdfs' => '', 'table_hive' => ''];
 
-        // 1. Extraction du Topic (souvent dans les macros info ou balises strong après "Préciser le nom de la topic")
-        if (preg_match('/Préciser le nom de la topic.*?<strong>(.*?)<\/strong>/is', $htmlBody, $matches)) {
-            $topicVal = trim(strip_tags($matches[1]));
-            if (!empty($topicVal)) {
-                $data['topic'] = $topicVal;
-                $data['type_flux'] = 'Kafka';
-            }
+        if (preg_match('/Préciser le nom de la topic.{0,800}?<strong>(.*?)<\/strong>/is', $htmlBody, $m)) {
+            $data['topic'] = trim(strip_tags($m[1]));
         }
 
-        // 2. Extraction du chemin HDFS de la trusted zone ou landing zone
-        if (preg_match('/\/projects\/[A-Z]+\/HAS\/DLK\/trusted-zone\/([^\/<]+)\/FRA\/([^\/<]+)/i', $htmlBody, $matches)) {
-            // $matches[1] correspond au SI, $matches[2] à l'OM potentiel ou dossier
-            $data['path_hdfs'] = trim($matches[0]);
+        if (preg_match('#/projects/[A-Z]+/HAS/DLK/trusted-zone/[^/<]+/FRA/[^/<\s]+#i', $htmlBody, $m)) {
+            $data['path_hdfs'] = trim($m[0]);
         }
 
-        // 3. Extraction de la table Hive
-        if (preg_match('/<p>\s*([a-z0-9_]+_fra)\s*<\/p>/i', $htmlBody, $matches)) {
-            $data['table_hive'] = trim($matches[1]);
+        if (preg_match('/<p>\s*([a-z0-9_]+_fra)\s*<\/p>/i', $htmlBody, $m)) {
+            $data['table_hive'] = trim($m[1]);
         }
 
-        // 4. Déduction du format (json, proto, csv)
-        $lowerBody = strtolower($htmlBody);
-        if (str_contains($lowerBody, 'proto') || str_contains($lowerBody, 'protobuf')) {
+        $lower = strtolower(strip_tags($htmlBody));
+        if (preg_match('/\b(proto(?:buf)?)\b/', $lower)) {
             $data['format'] = 'proto';
-        } elseif (str_contains($lowerBody, 'csv')) {
+        } elseif (preg_match('/\bcsv\b/', $lower)) {
             $data['format'] = 'csv';
-        } else {
+        } elseif (preg_match('/\bjson\b/', $lower)) {
             $data['format'] = 'json';
         }
 

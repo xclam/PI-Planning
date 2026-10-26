@@ -1,142 +1,99 @@
-<h1><?= htmlspecialchars($title) ?></h1>
+<?php
+$status = $pi->status();
 
-<?php if (isset($errorJira) && $errorJira): ?>
-    <div style="color: red; background: #ffe6e6; padding: 10px; margin-bottom: 15px;"><?= htmlspecialchars($errorJira) ?></div>
+/** Tableau de sélection réutilisé pour features et enablers. */
+$renderTable = static function (string $group, string $inputName, array $issues, array $createdUs, string $emptyMessage): void { ?>
+    <figure>
+        <table>
+            <thead>
+                <tr>
+                    <th class="col-check"><input type="checkbox" data-select-all="<?= e($group) ?>" aria-label="Tout sélectionner"></th>
+                    <th>Ticket</th>
+                    <th>Titre</th>
+                    <th>Statut</th>
+                    <th>US créée</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php if (!$issues): ?>
+                <tr><td colspan="5"><?= e($emptyMessage) ?></td></tr>
+            <?php else: ?>
+                <?php foreach ($issues as $issue):
+                    $key       = (string) $issue['key'];
+                    $usKey     = $createdUs[$key] ?? null;
+                    $statusObj = $issue['fields']['status'] ?? [];
+                ?>
+                    <tr>
+                        <td class="col-check">
+                            <input type="checkbox" name="<?= e($inputName) ?>[]" value="<?= e($key) ?>"
+                                   data-check-group="<?= e($group) ?>" <?= $usKey ? '' : 'checked' ?>>
+                        </td>
+                        <td><a href="<?= e(jira_url($key)) ?>" target="_blank" rel="noopener noreferrer"><?= e($key) ?></a></td>
+                        <td><?= e($issue['fields']['summary'] ?? '') ?></td>
+                        <td><span class="badge badge-<?= e(status_class($statusObj)) ?>"><?= e($statusObj['name'] ?? '') ?></span></td>
+                        <td>
+                            <?php if ($usKey): ?>
+                                <a href="<?= e(jira_url($usKey)) ?>" target="_blank" rel="noopener noreferrer"><?= e($usKey) ?></a> ✓
+                            <?php else: ?>
+                                <span class="muted">–</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+            </tbody>
+        </table>
+    </figure>
+<?php };
+?>
+<hgroup>
+    <h1><?= e($pi->name) ?> <span class="badge badge-pi-<?= e($status) ?>"><?= e(\Models\Pi::STATUS_LABELS[$status]) ?></span></h1>
+    <p><?= e(fmt_date($pi->start_date)) ?> → <?= e(fmt_date($pi->end_date)) ?></p>
+</hgroup>
+
+<?php if (!empty($errorJira)): ?>
+    <div class="flash flash-error" role="alert"><?= e($errorJira) ?></div>
 <?php endif; ?>
 
-<?php if (isset($errorSession) && $errorSession): ?>
-    <div style="color: red; background: #ffe6e6; border: 1px solid #ffcccc; padding: 12px; margin-bottom: 20px; font-weight: bold;">
-        <?= htmlspecialchars($errorSession) ?>
-    </div>
-<?php endif; ?>
+<details>
+    <summary role="button" class="outline secondary">Modifier le Program Increment</summary>
+    <article class="form-card">
+        <?php partial('pi/_form', [
+            'action'      => url('pi/update'),
+            'pi'          => $pi,
+            'sprints'     => $sprints,
+            'submitLabel' => 'Enregistrer les modifications',
+            'cancelUrl'   => url('pi/show', ['id' => $pi->id]),
+        ]); ?>
+    </article>
+</details>
 
-<!-- Formulaire de modification des infos du PI -->
-<form method="POST" action="<?= dirname($_SERVER['SCRIPT_NAME']) ?>/pi/update" style="background: #f9f9f9; padding: 15px; margin-bottom: 20px; border: 1px solid #ddd;">
-    <input type="hidden" name="id" value="<?= $pi->id ?>">
-    
-    <h3>Modifier le Program Increment</h3>
-    
-    <div style="margin-bottom: 10px;">
-        <label><strong>Nom :</strong></label><br>
-        <input type="text" name="name" value="<?= htmlspecialchars($pi->name) ?>" style="width: 100%; padding: 5px;" required>
-    </div>
+<form method="post" action="<?= e(url('pi/create-us')) ?>" data-confirm="Créer dans Jira les US des tickets sélectionnés ?">
+    <?= csrf_field() ?>
+    <input type="hidden" name="id" value="<?= (int) $pi->id ?>">
 
-    <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-        <div style="flex: 1;">
-            <label><strong>Date de début :</strong></label><br>
-            <input type="date" name="start_date" value="<?= htmlspecialchars($pi->start_date) ?>" style="width: 100%; padding: 5px;" required>
-        </div>
-        <div style="flex: 1;">
-            <label><strong>Date de fin :</strong></label><br>
-            <input type="date" name="end_date" value="<?= htmlspecialchars($pi->end_date) ?>" style="width: 100%; padding: 5px;" required>
-        </div>
+    <div class="toolbar">
+        <h2>Création des US</h2>
+        <button type="submit">Créer les US sélectionnées</button>
     </div>
 
-    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-        <div style="flex: 1;">
-            <label><strong>Sprint Features :</strong></label><br>
-            <select name="feature_sprint" style="width: 100%; padding: 5px;">
-                <option value="">-- Aucun --</option>
-                <?php foreach ($sprints as $sprint): ?>
-                    <?php $val = $sprint['id'] . '|' . $sprint['name']; ?>
-                    <option value="<?= $val ?>" <?= $pi->feature_sprint_id == $sprint['id'] ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($sprint['name']) ?> (<?= htmlspecialchars($sprint['state']) ?>)
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <div style="flex: 1;">
-            <label><strong>Sprint Enablers :</strong></label><br>
-            <select name="enabler_sprint" style="width: 100%; padding: 5px;">
-                <option value="">-- Aucun --</option>
-                <?php foreach ($sprints as $sprint): ?>
-                    <?php $val = $sprint['id'] . '|' . $sprint['name']; ?>
-                    <option value="<?= $val ?>" <?= $pi->enabler_sprint_id == $sprint['id'] ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($sprint['name']) ?> (<?= htmlspecialchars($sprint['state']) ?>)
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-    </div>
+    <div class="grid">
+        <article>
+            <header>
+                <strong>Features <?= e(\Services\UserStoryService::FEATURE_PREFIX) ?></strong>
+                <small class="muted">· <?= e($pi->feature_sprint_name ?? 'aucun sprint') ?> · <span data-count-for="features"></span></small>
+            </header>
+            <?php $renderTable('features', 'features', $features, $createdUs, 'Aucune feature ' . \Services\UserStoryService::FEATURE_PREFIX . ' trouvée.'); ?>
+        </article>
 
-    <button type="submit" style="padding: 8px 15px; background: #28a745; color: white; border: none; cursor: pointer;">Enregistrer les modifications</button>
-</form>
-
-<!-- Formulaire global pour la création des US -->
-<form method="POST" action="<?= dirname($_SERVER['SCRIPT_NAME']) ?>/pi/create-us">
-    <input type="hidden" name="id" value="<?= $pi->id ?>">
-
-    <!-- Bouton global au dessus des tableaux -->
-    <div style="margin-bottom: 20px;">
-        <button type="submit" style="padding: 10px 15px; background: #007bff; color: white; border: none; cursor: pointer;">Créer toutes les US</button>
-    </div>
-
-    <!-- Conteneur côte à côte pour les deux tableaux -->
-    <div style="display: flex; gap: 20px; align-items: flex-start;">
-        
-        <!-- Tableau Features ([B4ALL]) -->
-        <div style="flex: 1; background: #fff; border: 1px solid #ddd; padding: 15px;">
-            <h3>Features [B4ALL] (Sprint: <?= htmlspecialchars($pi->feature_sprint_name ?? 'N/A') ?>)</h3>
-            <table border="1" cellpadding="8" cellspacing="0" style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
-                <thead>
-                    <tr style="background: #f1f1f1;">
-                        <th style="width: 40px;">Sel</th>
-                        <th>ID</th>
-                        <th>Titre</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($features)): ?>
-                        <tr><td colspan="3">Aucune feature [B4ALL] trouvée.</td></tr>
-                    <?php else: ?>
-                        <?php foreach ($features as $issue): ?>
-                            <tr>
-                                <td style="text-align: center;">
-                                    <input type="checkbox" name="features[]" value="<?= htmlspecialchars($issue['key']) ?>" checked>
-                                </td>
-                                <td><?= htmlspecialchars($issue['key']) ?></td>
-                                <td><?= htmlspecialchars($issue['fields']['summary'] ?? '') ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-            <button type="submit" style="padding: 8px 12px; background: #28a745; color: white; border: none; cursor: pointer;">Créer les US associées</button>
-        </div>
-
-        <!-- Tableau Enablers ([DLK]) -->
-        <div style="flex: 1; background: #fff; border: 1px solid #ddd; padding: 15px;">
-            <h3>Enablers [DLK] (Sprint: <?= htmlspecialchars($pi->enabler_sprint_name ?? 'N/A') ?>)</h3>
-            <table border="1" cellpadding="8" cellspacing="0" style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
-                <thead>
-                    <tr style="background: #f1f1f1;">
-                        <th style="width: 40px;">Sel</th>
-                        <th>ID</th>
-                        <th>Titre</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($enablers)): ?>
-                        <tr><td colspan="3">Aucun enabler [DLK] trouvé.</td></tr>
-                    <?php else: ?>
-                        <?php foreach ($enablers as $issue): ?>
-                            <tr>
-                                <td style="text-align: center;">
-                                    <input type="checkbox" name="enablers[]" value="<?= htmlspecialchars($issue['key']) ?>" checked>
-                                </td>
-                                <td><?= htmlspecialchars($issue['key']) ?></td>
-                                <td><?= htmlspecialchars($issue['fields']['summary'] ?? '') ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-            <button type="submit" style="padding: 8px 12px; background: #17a2b8; color: white; border: none; cursor: pointer;">Créer les US enabler associées</button>
-        </div>
-
+        <article>
+            <header>
+                <strong>Enablers <?= e(\Services\UserStoryService::ENABLER_PREFIX) ?></strong>
+                <small class="muted">· <?= e($pi->enabler_sprint_name ?? 'aucun sprint') ?> · <span data-count-for="enablers"></span></small>
+            </header>
+            <?php $renderTable('enablers', 'enablers', $enablers, $createdUs, 'Aucun enabler ' . \Services\UserStoryService::ENABLER_PREFIX . ' trouvé.'); ?>
+        </article>
     </div>
 </form>
 
-<p style="margin-top: 20px;">
-    <a href="<?= dirname($_SERVER['SCRIPT_NAME']) ?>/">← Retour à la liste des PI</a>
-</p>
+<p><a href="<?= e(url('/')) ?>">← Retour à la liste des PI</a></p>

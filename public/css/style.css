@@ -1,0 +1,122 @@
+/* Surcharges Pico CSS — thème clair/sombre automatique */
+:root {
+    --brand: #1423dc;
+    --pico-primary: var(--brand);
+    --pico-primary-background: var(--brand);
+    --pico-primary-border: var(--brand);
+    --pico-primary-underline: rgba(20, 35, 220, .5);
+    --pico-primary-hover: #0f1cb0;
+    --pico-primary-hover-background: #0f1cb0;
+    --pico-primary-hover-border: #0f1cb0;
+    --pico-primary-focus: rgba(20, 35, 220, .25);
+    --pico-primary-inverse: #fff;
+
+    --c-done: #16a34a;
+    --c-progress: #2563eb;
+    --c-test: #d97706;
+    --c-todo: #64748b;
+    --c-alert: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --pico-primary: #8b96ff;
+        --pico-primary-background: #3a4aff;
+        --pico-primary-border: #3a4aff;
+        --pico-primary-hover: #aab2ff;
+        --pico-primary-hover-background: #5260ff;
+        --pico-primary-hover-border: #5260ff;
+        --pico-primary-underline: rgba(139, 150, 255, .5);
+    }
+}
+
+.muted { color: var(--pico-muted-color); }
+.brand { text-decoration: none; font-size: 1.15rem; }
+
+/* Messages flash */
+.flash {
+    padding: .75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: var(--pico-border-radius);
+    border-left: 4px solid currentColor;
+    background: rgba(100, 116, 139, .12);
+}
+.flash-success { color: var(--c-done);  background: rgba(22, 163, 74, .12); }
+.flash-error   { color: var(--c-alert); background: rgba(220, 38, 38, .12); }
+.flash-warning { color: var(--c-test);  background: rgba(217, 119, 6, .12); }
+.flash-info    { color: var(--c-progress); background: rgba(37, 99, 235, .12); }
+
+/* Barres d'outils */
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: .75rem;
+    margin: 1.5rem 0 1rem;
+}
+.toolbar h2 { margin: 0; }
+.toolbar-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.toolbar-actions button, .toolbar button, .toolbar [role="button"] { margin: 0; width: auto; }
+.toolbar-actions button { padding: .3rem .8rem; font-size: .85rem; }
+
+.form-card { max-width: 720px; }
+.form-actions { display: flex; justify-content: flex-end; gap: .75rem; }
+.form-actions > * { width: auto; margin: 0; }
+
+/* Tableaux */
+.col-check { width: 2.5rem; text-align: center; }
+table td, table th { vertical-align: top; }
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: .1rem .55rem;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    background: rgba(100, 116, 139, .18);
+    color: var(--pico-color);
+}
+.badge-done, .badge-pi-past       { background: rgba(22, 163, 74, .18);  color: var(--c-done); }
+.badge-progress, .badge-pi-current{ background: rgba(37, 99, 235, .18);  color: var(--c-progress); }
+.badge-test                       { background: rgba(217, 119, 6, .18);  color: var(--c-test); }
+.badge-todo, .badge-pi-upcoming   { background: rgba(100, 116, 139, .18); color: var(--c-todo); }
+.badge-new                        { background: var(--c-done); color: #fff; }
+.status-summary { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+/* Carte sprint en cours */
+.sprint-card { border-left: 4px solid var(--brand); }
+.sprint-card h3 { margin-bottom: .25rem; }
+.stats { display: flex; flex-wrap: wrap; gap: 2rem; margin-bottom: 1rem; }
+.stat { display: flex; flex-direction: column; }
+.stat-value { font-size: 1.75rem; font-weight: 700; line-height: 1.1; }
+.stat-label { font-size: .8rem; color: var(--pico-muted-color); }
+.stat-progress .stat-value { color: var(--c-progress); }
+.stat-done .stat-value     { color: var(--c-done); }
+.stat-alert .stat-value    { color: var(--c-alert); }
+
+/* Mes tickets */
+.ticket { padding: 1rem; margin-bottom: .75rem; }
+.ticket-recent { border-left: 4px solid var(--c-done); }
+.ticket-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem;
+    margin: 0 0 .5rem;
+    padding: 0;
+    background: none;
+    border: 0;
+}
+.ticket-title { flex: 1; min-width: 12rem; font-weight: 500; }
+.ticket-comment { margin: 0 0 .5rem; font-size: .9rem; color: var(--pico-muted-color); white-space: pre-line; }
+.ai-box {
+    padding: .5rem .75rem;
+    font-size: .85rem;
+    border-left: 3px solid var(--brand);
+    background: rgba(20, 35, 220, .06);
+    border-radius: 0 var(--pico-border-radius) var(--pico-border-radius) 0;
+}
+.ai-action { margin-top: .25rem; font-weight: 600; color: var(--pico-primary); }

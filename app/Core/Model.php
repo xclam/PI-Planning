@@ -1,144 +1,197 @@
 <?php
+declare(strict_types=1);
+
 namespace Core;
 
-use PDO;
-use Exception;
+use InvalidArgumentException;
 
-abstract class Model {
+abstract class Model
+{
     protected static ?string $table = null;
     protected static string $primaryKey = 'id';
+
     protected array $attributes = [];
     protected array $original = [];
 
-    public function __construct(array $attributes = []) {
+    public function __construct(array $attributes = [])
+    {
         $this->fill($attributes);
     }
 
-    /** Détermine automatiquement le nom de la table si non défini */
-    public static function getTableName(): string {
+    public static function getTableName(): string
+    {
         if (static::$table !== null) {
             return static::$table;
         }
         $parts = explode('\\', static::class);
-        $className = end($parts);
-        return strtolower($className) . 's'; // Ex: Pi -> pis
+        return strtolower(end($parts)) . 's';
     }
 
-    /** Hydrate le modèle avec un tableau de données */
-    public function fill(array $attributes): self {
+    public function fill(array $attributes): static
+    {
         foreach ($attributes as $key => $value) {
             $this->attributes[$key] = $value;
         }
         return $this;
     }
 
-    /** Accès magique aux propriétés ($model->name) */
-    public function __get(string $key) {
+    public function __get(string $key): mixed
+    {
         return $this->attributes[$key] ?? null;
     }
 
-    /** Définition magique des propriétés ($model->name = 'value') */
-    public function __set(string $key, $value): void {
+    public function __set(string $key, mixed $value): void
+    {
         $this->attributes[$key] = $value;
     }
 
-    /** Récupère tous les enregistrements */
-    public static function all(): array {
-        $db = Database::getConnection();
-        $table = static::getTableName();
-        $stmt = $db->query("SELECT * FROM {$table} ORDER BY " . static::$primaryKey . " DESC");
-        
-        $results = [];
-        while ($row = $stmt->fetch()) {
-            $results[] = new static($row);
+    /** Nécessaire pour que `$model->champ ?? $defaut` fonctionne. */
+    public function __isset(string $key): bool
+    {
+        return isset($this->attributes[$key]);
+    }
+
+    /** Protège les noms de colonnes/tables interpolés dans le SQL. */
+    private static function quote(string $identifier): string
+    {
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier)) {
+            throw new InvalidArgumentException("Identifiant SQL invalide : {$identifier}");
         }
-        return $results;
+        return '`' . $identifier . '`';
     }
 
-    /** Trouve un enregistrement par sa clé primaire */
-    public static function find($id): ?static {
-        $db = Database::getConnection();
-        $table = static::getTableName();
-        $key = static::$primaryKey;
-        
-        $stmt = $db->prepare("SELECT * FROM {$table} WHERE {$key} = :id LIMIT 1");
-        $stmt->execute(['id' => $id]);
+    protected static function hydrate(array $row): static
+    {
+        $model = new static($row);
+        $model->original = $row;
+        return $model;
+    }
+
+    /** @return static[] */
+    public static function all(): array
+    {
+        return static::where([], static::$primaryKey, 'DESC');
+    }
+
+    /** @return static[] */
+    public static function where(array $criteria, ?string $orderBy = null, string $direction = 'ASC'): array
+    {
+        $sql    = 'SELECT * FROM ' . self::quote(static::getTableName());
+        $params = [];
+        $conds  = [];
+
+        foreach ($criteria as $column => $value) {
+            $placeholder          = 'w' . count($params);
+            $conds[]              = self::quote((string) $column) . ' = :' . $placeholder;
+            $params[$placeholder] = $value;
+        }
+        if ($conds) {
+            $sql .= ' WHERE ' . implode(' AND ', $conds);
+        }
+        if ($orderBy !== null) {
+            $sql .= ' ORDER BY ' . self::quote($orderBy) . (strtoupper($direction) === 'DESC' ? ' DESC' : ' ASC');
+        }
+
+        $stmt = Database::getConnection()->prepare($sql);
+        $stmt->execute($params);
+
+        return array_map(static fn(array $row): static => static::hydrate($row), $stmt->fetchAll());
+    }
+
+    public static function find(int|string $id): ?static
+    {
+        return static::findBy([static::$primaryKey => $id]);
+    }
+
+    public static function findBy(array $criteria): ?static
+    {
+        $rows = static::where($criteria);
+        return $rows[0] ?? null;
+    }
+
+    public static function last(): ?static
+    {
+        $stmt = Database::getConnection()->query(
+            'SELECT * FROM ' . self::quote(static::getTableName()) .
+            ' ORDER BY ' . self::quote(static::$primaryKey) . ' DESC LIMIT 1'
+        );
         $row = $stmt->fetch();
-
-        return $row ? new static($row) : null;
+        return $row ? static::hydrate($row) : null;
     }
 
-    /** Récupère le dernier enregistrement */
-    public static function last(): ?static {
-        $db = Database::getConnection();
-        $table = static::getTableName();
-        $key = static::$primaryKey;
-        
-        $stmt = $db->query("SELECT * FROM {$table} ORDER BY {$key} DESC LIMIT 1");
-        $row = $stmt->fetch();
-
-        return $row ? new static($row) : null;
-    }
-
-    /** Méthode statique pour créer et sauvegarder en une ligne */
-    public static function create(array $attributes): static {
+    public static function create(array $attributes): static
+    {
         $model = new static($attributes);
         $model->save();
         return $model;
     }
 
-    /** Sauvegarde automatique (INSERT si nouveau, UPDATE si existant) */
-    public function save(): bool {
-        $db = Database::getConnection();
-        $table = static::getTableName();
-        $key = static::$primaryKey;
+    public function save(): bool
+    {
+        $db    = Database::getConnection();
+        $table = self::quote(static::getTableName());
+        $key   = static::$primaryKey;
+        $id    = $this->attributes[$key] ?? null;
 
-        // Si la clé primaire est présente et non nulle, on fait un UPDATE
-        if (isset($this->attributes[$key]) && !empty($this->attributes[$key])) {
-            $fields = [];
-            $params = [];
+        // UPDATE : uniquement les champs modifiés
+        if ($id !== null && $id !== '' && $id !== 0) {
+            $changes = [];
             foreach ($this->attributes as $field => $value) {
-                if ($field === $key) continue;
-                $fields[] = "`{$field}` = :{$field}";
-                $params[$field] = $value;
+                if ($field === $key) {
+                    continue;
+                }
+                if (!array_key_exists($field, $this->original) || $this->original[$field] !== $value) {
+                    $changes[$field] = $value;
+                }
             }
-            $params[$key] = $this->attributes[$key];
+            if (!$changes) {
+                return true;
+            }
 
-            $sql = "UPDATE {$table} SET " . implode(', ', $fields) . " WHERE {$key} = :{$key}";
-            $stmt = $db->prepare($sql);
-            return $stmt->execute($params);
-        } 
+            $sets   = [];
+            $params = [];
+            $i      = 0;
+            foreach ($changes as $field => $value) {
+                $sets[]           = self::quote((string) $field) . " = :c{$i}";
+                $params["c{$i}"]  = $value;
+                $i++;
+            }
+            $params['pk'] = $id;
 
-        // Sinon, on fait un INSERT
-        $fields = array_keys($this->attributes);
-        $placeholders = array_map(fn($f) => ":{$f}", $fields);
-
-        $sql = "INSERT INTO {$table} (`" . implode('`, `', $fields) . "`) VALUES (" . implode(', ', $placeholders) . ")";
-        $stmt = $db->prepare($sql);
-        $success = $stmt->execute($this->attributes);
-
-        if ($success) {
-            $this->attributes[$key] = (int) $db->lastInsertId();
+            $ok = $db->prepare("UPDATE {$table} SET " . implode(', ', $sets) . ' WHERE ' . self::quote($key) . ' = :pk')
+                ->execute($params);
+            if ($ok) {
+                $this->original = $this->attributes;
+            }
+            return $ok;
         }
 
-        return $success;
+        // INSERT
+        $fields       = array_keys($this->attributes);
+        $columns      = implode(', ', array_map(static fn($f) => self::quote((string) $f), $fields));
+        $placeholders = implode(', ', array_map(static fn($f) => ':' . $f, $fields));
+
+        $ok = $db->prepare("INSERT INTO {$table} ({$columns}) VALUES ({$placeholders})")->execute($this->attributes);
+        if ($ok) {
+            $this->attributes[$key] = (int) $db->lastInsertId();
+            $this->original         = $this->attributes;
+        }
+        return $ok;
     }
 
-    /** Supprime l'enregistrement courant */
-    public function delete(): bool {
+    public function delete(): bool
+    {
         $key = static::$primaryKey;
         if (!isset($this->attributes[$key])) {
             return false;
         }
-
-        $db = Database::getConnection();
-        $table = static::getTableName();
-        $stmt = $db->prepare("DELETE FROM {$table} WHERE {$key} = :id");
-        return $stmt->execute(['id' => $this->attributes[$key]]);
+        return Database::getConnection()
+            ->prepare('DELETE FROM ' . self::quote(static::getTableName()) . ' WHERE ' . self::quote($key) . ' = :id')
+            ->execute(['id' => $this->attributes[$key]]);
     }
 
-    /** Convertit les attributs en tableau natif */
-    public function toArray(): array {
+    public function toArray(): array
+    {
         return $this->attributes;
     }
 }

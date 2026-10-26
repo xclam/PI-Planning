@@ -1,66 +1,81 @@
 <?php
+declare(strict_types=1);
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+use Controllers\PiController;
+use Controllers\SprintController;
 
-session_start();
-
-// Appel de la config globale
-if (!function_exists('config')) {
-    function config(string $key, $default = null) {
-        return \Core\Config::get($key, $default);
-    }
-}
-
-// Autoloader natif ultra-léger
-spl_autoload_register(function ($class) {
+spl_autoload_register(static function (string $class): void {
     $file = __DIR__ . '/../app/' . str_replace('\\', '/', $class) . '.php';
-    if (file_exists($file)) {
+    if (is_file($file)) {
         require_once $file;
     }
 });
+require __DIR__ . '/../app/helpers.php';
 
-// Nettoyage intelligent et robuste de l'URI
-$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+session_set_cookie_params([
+    'httponly' => true,
+    'samesite' => 'Lax',
+    'secure'   => !empty($_SERVER['HTTPS']),
+]);
+session_start();
 
-if (($pos = strpos($requestUri, '/public/')) !== false) {
-    // Si /public/ est dans l'URL, on ne garde que ce qui suit
-    $uri = substr($requestUri, $pos + 7);
-} else {
-    // Sinon, on retire le dossier parent du script (ex: /piplanning)
-    $scriptDir = dirname(dirname($_SERVER['SCRIPT_NAME']));
-    $uri = str_replace($scriptDir, '', $requestUri);
+$debug = (bool) config('app.debug', false);
+ini_set('display_errors', $debug ? '1' : '0');
+error_reporting(E_ALL);
+
+set_exception_handler(static function (\Throwable $e) use ($debug): void {
+    error_log((string) $e);
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
+    echo $debug ? '<pre>' . e((string) $e) . '</pre>' : 'Erreur interne.';
+});
+
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: SAMEORIGIN');
+header('Referrer-Policy: same-origin');
+
+// --- Résolution du chemin (fonctionne avec ou sans /public/ dans l'URL) ---
+$path        = rawurldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+$publicRoot  = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
+$projectRoot = rtrim(str_replace('\\', '/', dirname($publicRoot)), '/');
+
+foreach ([$publicRoot, $projectRoot] as $prefix) {
+    if ($prefix !== '' && ($path === $prefix || str_starts_with($path, $prefix . '/'))) {
+        $path = substr($path, strlen($prefix));
+        break;
+    }
+}
+$path = '/' . trim($path, '/');
+
+// --- Routes : chemin => méthode HTTP => [contrôleur, action] ---
+$routes = [
+    '/'            => ['GET'  => [PiController::class, 'index']],
+    '/index.php'   => ['GET'  => [PiController::class, 'index']],
+    '/pi/create'   => ['GET'  => [PiController::class, 'create']],
+    '/pi/store'    => ['POST' => [PiController::class, 'store']],
+    '/pi/show'     => ['GET'  => [PiController::class, 'show']],
+    '/pi/update'   => ['POST' => [PiController::class, 'update']],
+    '/pi/create-us'=> ['POST' => [PiController::class, 'createUs']],
+    '/sprint/show' => ['GET'  => [SprintController::class, 'show']],
+];
+
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+
+if (!isset($routes[$path])) {
+    abort(404, 'Page introuvable : ' . $path);
+}
+if (!isset($routes[$path][$method])) {
+    header('Allow: ' . implode(', ', array_keys($routes[$path])));
+    abort(405, 'Méthode non autorisée.');
+}
+if ($method === 'POST' && !csrf_valid()) {
+    abort(403, 'Jeton CSRF invalide ou session expirée. Rechargez la page.');
 }
 
-$uri = '/' . trim($uri, '/');
+[$class, $action] = $routes[$path][$method];
+(new $class())->$action();
 
-// Routage
-switch ($uri) {
-    case '/':
-    case '/index.php':
-        (new Controllers\PiController())->index();
-        break;
-    case '/pi/create':
-        (new Controllers\PiController())->create();
-        break;
-    case '/pi/store':
-        (new Controllers\PiController())->store();
-        break;
-    case '/pi/show':
-        (new Controllers\PiController())->show();
-        break;
-    case '/pi/update':
-        (new Controllers\PiController())->update();
-        break;
-    case '/pi/create-us':
-        (new Controllers\PiController())->createUs();
-        break;
-    case '/sprint/show':
-        (new Controllers\SprintController())->show();
-        break;
-    default:
-        http_response_code(404);
-        echo "404 Not Found (Route : " . htmlspecialchars($uri) . ")";
-        break;
+if ($method === 'GET') {
+    unset($_SESSION['_old']);
 }
